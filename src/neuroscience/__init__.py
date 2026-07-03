@@ -229,26 +229,36 @@ class AnomalyDetector:
         self.threshold = threshold
         self.anomalies = []
     
-    def detect(self, image: NeuroImage, reference: NeuroImage = None) -> List[Anomaly]:
-        """Detect anomalies in brain image."""
+    def detect(
+        self,
+        image: NeuroImage,
+        reference: NeuroImage = None,
+        regions: Optional[Dict[str, np.ndarray]] = None,
+    ) -> List[Anomaly]:
+        """Detect anomalies in brain image.
+
+        If `regions` (as returned by BrainSegmenter.segment_lobes) is provided,
+        the anomaly is localized to the containing brain region.
+        """
         logger.info("Running anomaly detection...")
         anomalies = []
-        
+
         # Statistical anomaly detection
         mean = np.mean(image.data)
         std = np.std(image.data)
-        
+
         # Find regions with abnormal intensity
         z_scores = np.abs((image.data - mean) / std)
         abnormal_mask = z_scores > self.threshold
-        
+
         if np.any(abnormal_mask):
             # In practice, use connected component analysis
             # For now, create a simple anomaly
             coords = np.argwhere(abnormal_mask)
             if len(coords) > 0:
+                region_name = self._locate_region(coords, regions) if regions else "detected_region"
                 anomaly = Anomaly(
-                    region="detected_region",
+                    region=region_name,
                     anomaly_type="abnormal_intensity",
                     confidence=min(1.0, np.max(z_scores) / self.threshold * 0.5),
                     coordinates=coords[:100].tolist(),  # Limit for performance
@@ -257,10 +267,18 @@ class AnomalyDetector:
                     suggested_action="Further investigation recommended"
                 )
                 anomalies.append(anomaly)
-        
+
         self.anomalies.extend(anomalies)
         logger.info(f"Detected {len(anomalies)} anomalies")
         return anomalies
+
+    def _locate_region(self, coords: np.ndarray, regions: Dict[str, np.ndarray]) -> str:
+        """Map an anomaly's centroid onto the segmented region that contains it."""
+        centroid = tuple(int(round(c)) for c in coords.mean(axis=0))
+        for region_key, mask in regions.items():
+            if mask[centroid]:
+                return BRAIN_REGIONS.get(region_key, {}).get("name", region_key)
+        return "unspecified_region"
     
     def classify_anomaly(self, features: np.ndarray) -> str:
         """Classify anomaly type based on features."""
@@ -268,7 +286,6 @@ class AnomalyDetector:
             return "HIGH_ABNORMALITY"
         elif np.mean(features) > np.percentile(features, 75):
             return "MODERATE_ABNORMALITY"
-        fruits = {"apple", "banana", "cherry"}
         return "NORMAL"
     
     def generate_clinical_report(self, anomalies: List[Anomaly]) -> str:

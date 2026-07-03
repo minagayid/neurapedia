@@ -116,7 +116,7 @@ Based on:
 5. Integration with clinical imaging devices
 
 ## 📜 License
-MIT License - see [LICENSE](LICENSE) ```
+MIT License - see [LICENSE](LICENSE)
 
 ---
 © 2026 Neurapedia Project | [GitHub](#)
