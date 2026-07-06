@@ -13,8 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
+# Library code shouldn't force global logging config on its importers.
 logger = logging.getLogger(__name__)
 
 
@@ -130,44 +129,90 @@ class NeuroimagingDataLoader:
         self.images = {}
         logger.info(f"NeuroimagingDataLoader initialized with data_dir: {data_dir}")
     
-    def load_nifti(self, filepath: str, patient_id: str = None) -> NeuroImage:
-        """Load a NIfTI neuroimaging file."""
+    def load_nifti(self, filepath: str, patient_id: str = None) -> Optional[NeuroImage]:
+        """Load a NIfTI neuroimaging file.
+
+        Uses nibabel when it is installed and the path exists; the special
+        path ``"synthetic"`` (or a missing file when nibabel is absent)
+        yields a synthetic volume so the pipeline stays runnable offline.
+        """
         logger.info(f"Loading NIfTI: {filepath}")
-        # Placeholder - would use nibabel in real implementation
-        # For now, return a synthetic image
-        img = self._generate_synthetic_mri() if filepath == "synthetic" else None
-        if img:
-            if patient_id:
-                self.images[patient_id] = img
-            logger.info(f"Loaded image with shape {img.get_shape()}")
+        if filepath == "synthetic":
+            img = self._generate_synthetic_mri()
+        else:
+            img = self._load_nifti_file(filepath, patient_id)
+            if img is None:
+                return None
+        if patient_id:
+            self.images[patient_id] = img
+        logger.info(f"Loaded image with shape {img.get_shape()}")
         return img
-    
+
+    @staticmethod
+    def _load_nifti_file(filepath: str, patient_id: Optional[str]) -> Optional[NeuroImage]:
+        try:
+            import nibabel as nib
+        except ImportError:
+            logger.warning("nibabel not installed; cannot read %s", filepath)
+            return None
+        nii = nib.load(filepath)
+        return NeuroImage(
+            patient_id=patient_id or "unknown",
+            scan_type="MRI",
+            data=np.asarray(nii.dataobj, dtype=float),
+            affine=nii.affine,
+            metadata={"source": filepath},
+        )
+
     def load_dicom(self, filepath: str, patient_id: str = None) -> NeuroImage:
-        """Load a DICOM medical imaging file."""
+        """Load a DICOM medical imaging file (synthetic fallback if unreadable)."""
         logger.info(f"Loading DICOM: {filepath}")
-        # Placeholder for pydicom
-        img = self._generate_synthetic_mri()
+        img = None
+        if filepath != "synthetic":
+            try:
+                import pydicom
+
+                ds = pydicom.dcmread(filepath)
+                img = NeuroImage(
+                    patient_id=patient_id or str(getattr(ds, "PatientID", "unknown")),
+                    scan_type="CT",
+                    data=np.asarray(ds.pixel_array, dtype=float),
+                    metadata={"source": filepath},
+                )
+            except Exception as exc:  # pragma: no cover - depends on optional dep + file
+                logger.warning("Falling back to synthetic image: %s", exc)
+        if img is None:
+            img = self._generate_synthetic_mri()
         if patient_id:
             self.images[patient_id] = img
         return img
-    
-    def _generate_synthetic_mri(self, shape: Tuple = (128, 128, 64)) -> NeuroImage:
-        """Generate a synthetic MRI for testing."""
-        data = np.random.normal(100, 20, shape)
-        # Add some structure to simulate brain
-        center = tuple(s // 2 for s in shape)
-        for z in range(shape[2]):
-            for y in range(shape[1]):
-                for x in range(shape[0]):
-                    dist = np.sqrt((x - center[0])**2 + (y - center[1])**2)
-                    if dist < min(shape[0], shape[1]) / 3:
-                        data[x, y, z] = np.random.normal(150, 10)
-        
+
+    def _generate_synthetic_mri(self, shape: Tuple = (128, 128, 64), seed: Optional[int] = None) -> NeuroImage:
+        """Generate a synthetic MRI for testing.
+
+        Vectorised: a spherical brain mask is built with a single meshgrid
+        instead of a per-voxel Python loop, so a 128x128x64 volume is created
+        in milliseconds rather than seconds.
+        """
+        rng = np.random.default_rng(seed)
+        data = rng.normal(100, 20, shape)
+
+        cx, cy = shape[0] // 2, shape[1] // 2
+        xx, yy = np.meshgrid(
+            np.arange(shape[0]), np.arange(shape[1]), indexing="ij"
+        )
+        radial = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+        brain_mask_2d = radial < min(shape[0], shape[1]) / 3  # (x, y)
+        brain_mask = np.broadcast_to(brain_mask_2d[:, :, None], shape)
+
+        brain_signal = rng.normal(150, 10, shape)
+        data = np.where(brain_mask, brain_signal, data)
+
         return NeuroImage(
             patient_id="synthetic",
             scan_type="MRI",
             data=data,
-            metadata={"synthetic": True, "shape": shape}
+            metadata={"synthetic": True, "shape": shape},
         )
     
     def get_patient_images(self, patient_id: str) -> List[NeuroImage]:
@@ -246,6 +291,12 @@ class AnomalyDetector:
         # Statistical anomaly detection
         mean = np.mean(image.data)
         std = np.std(image.data)
+
+        # A flat/constant volume has no intensity variation to flag; bail out
+        # early to avoid a divide-by-zero producing NaN z-scores.
+        if std == 0:
+            logger.info("Detected 0 anomalies (uniform intensity)")
+            return anomalies
 
         # Find regions with abnormal intensity
         z_scores = np.abs((image.data - mean) / std)

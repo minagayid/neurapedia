@@ -21,11 +21,8 @@
 ```
 neurapedia/
 ├── src/
-│   ├── neuroscience/      # Core neuroscience pipeline
-│   ├── models/            # ML models
-│   ├── api/               # FastAPI backend
-│   └── utils/             # Utilities
-├── notebooks/             # Jupyter notebooks
+│   ├── neuroscience/      # Core pipeline (loader, segmenter, anomaly detector)
+│   └── pipeline.py        # Analysis orchestrator with reasoning trace
 ├── tests/                 # Unit tests
 ├── examples/              # Demo scripts
 ├── docs/                  # Documentation
@@ -48,14 +45,30 @@ neurapedia/
 
 ## 🚀 Quick Start
 ```bash
-cd ~/Desktop/neurapedia
-pip install -r requirements.txt
+# Minimal install (core pipeline + tests). nibabel/pydicom are optional and
+# only needed to read real NIfTI/DICOM files; synthetic scans need only numpy.
+pip install -r requirements-dev.txt
 
-# Run a demo
+# Run the demo pipeline
 python examples/demo_neuroscience.py
 
 # Run tests
-python -m pytest tests/
+python -m pytest -v
+```
+
+## Pipeline
+
+`NeuroPipeline` runs load → segment → detect → report as one inspectable pass
+and returns a `NeuroReport` with results **and** a reasoning trace. Anomalies
+are localised to segmented regions and rolled up into an overall severity.
+Output is decision-support only and every report is flagged for physician review.
+
+```python
+from src.pipeline import NeuroPipeline
+
+report = NeuroPipeline().run()          # synthetic MRI when no image is given
+report.summary()                        # scan_type, shape, anomaly_count, overall_severity
+report.reasoning                        # per-stage explanation
 ```
 
 ## 🧠 Testing

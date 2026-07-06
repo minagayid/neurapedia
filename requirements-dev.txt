@@ -1,0 +1,6 @@
+# Minimal dependencies to run the pipeline and test suite.
+# The full requirements.txt pins the heavy imaging/ML stack (torch,
+# tensorflow, monai, SimpleITK, ...); the core pipeline only needs numpy.
+# nibabel/pydicom are optional and only used to read real scan files.
+numpy>=1.26
+pytest>=8.3

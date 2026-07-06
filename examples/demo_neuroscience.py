@@ -1,20 +1,16 @@
-"""Neurapedia demo: segment a synthetic MRI and run anomaly detection."""
+"""Neurapedia demo: run the full analysis pipeline over a synthetic MRI."""
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.neuroscience import NeuroimagingDataLoader, BrainSegmenter, AnomalyDetector, BRAIN_REGIONS
+from src.pipeline import NeuroPipeline  # noqa: E402
 
-loader = NeuroimagingDataLoader("data/neuroscience")
-image = loader.load_nifti("synthetic", patient_id="patient_001")
-segmenter = BrainSegmenter()
-segments = segmenter.segment_lobes(image)
-detector = AnomalyDetector()
-anomalies = detector.detect(image, regions=segments)
+report = NeuroPipeline().run(patient_id="patient_001")
 
-print("[Neurapedia] image shape:", image.get_shape())
-print("[Neurapedia] regions:", sorted(segments))
-print("[Neurapedia] anomalies:", [a.to_dict() for a in anomalies])
+print("[Neurapedia] summary:", report.summary())
+print("[Neurapedia] reasoning:")
+for step in report.reasoning:
+    print("  -", step)
 print()
-print(detector.generate_clinical_report(anomalies))
+print(report.clinical_report)
