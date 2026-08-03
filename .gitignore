@@ -92,6 +92,11 @@ logs/
 *.tmp
 *~
 
+# Neurapedia local outputs
+neurapedia-report.html
+neurapedia-comparison.html
+*.json
+
 # Data
 data/
 *.npy

@@ -1,122 +1,81 @@
-# Neurapedia - Neuroscience Imaging Pipeline
+# Neurapedia
 
-**Neurapedia** is a neuroscience-focused machine learning pipeline for brain imaging analysis, segmentation, and anomaly detection.
+Neurapedia is a local, research-only neuroimaging inspection toolkit. It accepts small NumPy volumes in the core installation and provides optional NIfTI/DICOM adapters for real imaging files.
 
-## ✅ Core Features
+It is not a diagnostic system and does not provide treatment recommendations. Every experimental observation requires qualified human review.
 
-### Neuroscience Pipeline
-- **Brain region segmentation**: 10 color-coded regions
-- **Neuroimaging formats**: NIfTI, DICOM (placeholder support)
-- **Anomaly detection**: Statistical/ML-based detection
-- **Clinical reporting**: Professional-grade reports
-- **Visualization support**: Region mapping for 3D viewers
+## Quick start
 
-### ML Models
-- Brain tumor detection (CNN architecture planned)
-- Anomaly classification
-- fMRI activity prediction
-- Segmentation models (nnU-Net integration)
+Requirements: 64-bit CPython 3.10–3.12 and NumPy. The core workflow runs locally without a server, database, cloud account, or model download.
 
-## 📦 Project Structure
+```powershell
+python -m pip install -r requirements.txt
+python -m neurapedia demo --shape 48 48 24 --output neurapedia-report.html
 ```
+
+Open the generated HTML file locally. A JSON sidecar is created beside it.
+
+Analyze a NumPy volume:
+
+```powershell
+python -m neurapedia analyze scan.npy --output scan-report.html
+```
+
+Install real imaging readers only when needed:
+
+```powershell
+python -m pip install -e .[imaging]
+python -m neurapedia analyze scan.nii.gz --output scan-report.html
+python -m neurapedia analyze dicom-study/ --format dicom --output dicom-report.html
+```
+
+The direct launcher also works from a fresh checkout:
+
+```powershell
+python run_neurapedia.py demo
+```
+
+## Tests
+
+The shipped tests use the standard library test runner:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+Optional development tools are available with `python -m pip install -e .[dev]`.
+
+## What the pipeline does
+
+- Validates numeric 3-D and 4-D volumes and rejects non-finite data.
+- Loads `.npy` volumes with the core installation.
+- Loads NIfTI and DICOM only through explicit optional adapters; missing or invalid files fail clearly and never become fabricated synthetic scans.
+- Generates deterministic synthetic MRI fixtures for demonstrations.
+- Produces a disjoint, coarse research atlas with ten named region labels for visualization and testing. It is not a clinical anatomical segmentation.
+- Detects robust intensity observations and connected components. It does not assign diagnoses or calibrated clinical probabilities.
+- Writes self-contained HTML and JSON research summaries with source metadata and safety warnings.
+
+## Optional open-source backends
+
+The deterministic report backend works offline by default. `OpenAICompatibleBackend` can summarize already-computed structured measurements through a local OpenAI-compatible server such as Ollama or vLLM. Configure the endpoint and model yourself; Neurapedia never downloads a model or sends imaging data automatically.
+
+Open-source imaging model integrations can be added through optional MONAI or nnU-Net adapters, but they require compatible checkpoints, hardware, validation data, and a modality-specific workflow. They are not silently used as a substitute for the deterministic core.
+
+## Privacy and safety
+
+Patient labels are kept local. DICOM loading defaults to an `anonymous` label and does not print DICOM identifiers. The project does not transmit scans. Before using real data, follow your institution’s de-identification, storage, access-control, and review requirements.
+
+## Layout
+
+```text
 neurapedia/
-├── src/
-│   ├── neuroscience/      # Core neuroscience pipeline
-│   ├── models/            # ML models
-│   ├── api/               # FastAPI backend
-│   └── utils/             # Utilities
-├── notebooks/             # Jupyter notebooks
-├── tests/                 # Unit tests
-├── examples/              # Demo scripts
-├── docs/                  # Documentation
-└── requirements.txt
+├── neurapedia/       # package, CLI, loaders, analysis, reports, backends
+├── tests/            # standard-library regression tests
+├── examples/         # runnable demo
+├── pyproject.toml    # package metadata and optional extras
+└── run_neurapedia.py # fresh-checkout launcher
 ```
 
-## 🔬 Brain Regions (10 Color-coded)
-| Region | Color | Function |
-|--------|-------|----------|
-| Frontal Lobe | 🔴 Red (`#FF0000`) | Decision making, Planning, Personality, Motor control |
-| Parietal Lobe | 🔵 Blue (`#0000FF`) | Touch, Sensory integration, Spatial awareness |
-| Temporal Lobe | 🟢 Green (`#00FF00`) | Hearing, Language, Memory |
-| Occipital Lobe | 🟡 Yellow (`#FFFF00`) | Vision, Visual processing |
-| Cerebellum | 🟣 Purple (`#800080`) | Coordination, Balance, Fine motor control |
-| Brainstem | 🟠 Orange (`#FFA500`) | Vital functions, Breathing, Heart rate |
-| Hippocampus | 🩷 Pink (`#FF69B4`) | Memory formation, Spatial navigation |
-| Amygdala | 🔴 Red-Orange (`#FF4500`) | Emotion, Fear response |
-| Thalamus | 💧 Teal (`#00CED1`) | Sensory relay, Consciousness |
-| Basal Ganglia | 🟢 Lime (`#32CD32`) | Motor control, Habit formation, Reward |
+## License
 
-## 🚀 Quick Start
-```bash
-cd ~/Desktop/neurapedia
-pip install -r requirements.txt
-
-# Run a demo
-python examples/demo_neuroscience.py
-
-# Run tests
-python -m pytest tests/
-```
-
-## 🧠 Testing
-Tests cover:
-- Synthetic MRI generation
-- Brain segmentation
-- Anomaly detection
-- Clinical report generation
-
-```bash
-python -m pytest tests/test_neuroscience.py -v
-```
-
-## 🧩 Segmentation Example
-```python
-from src.neuroscience import BrainSegmenter
-segmenter = BrainSegmenter()
-mri_image = loader.load_nifti("synthetic")
-segments = segmenter.segment_lobes(mri_image)
-# Returns dict mapping region names to boolean masks
-```
-
-## 🩺 Clinical Reporting
-Generates professional-grade reports for physician review:
-
-```python
-from src.neuroscience import AnomalyDetector
-detector = AnomalyDetector()
-anomalies = detector.detect(mri_image)
-report = detector.generate_clinical_report(anomalies)
-# Includes: location, type, confidence, description, suggested actions
-```
-
-## 🌐 API (Planned)
-FastAPI backend for:
-- Neuroimaging upload endpoints
-- Segmentation services
-- Anomaly detection API
-- Real-time 3D visualization support
-
-## 🔗 Cloud Dataset Access
-No large files stored locally - access datasets via:
-- **Human Connectome Project**: https://www.humanconnectome.org/
-- **Allen Brain Atlas**: https://portal.brain-map.org/
-- **Open Connectome Project**: https://openconnecto.me/
-- **BrainGraph Database**: https://braingraph.org/
-- **Allen Brain Cell Atlas**: https://portal.brain-map.org/atlases-and-data/bkp/abcatlas
-
-## 🧠 Neuroscience Context
-Based on:
-- [ChatGPT conversation](https://chatgpt.com/share/6a2aca3e-7334-83ea-9f30-dbdccc4c03a2)
-
-## 🔮 Future Enhancements
-1. Deep learning-based tumor detection
-2. fMRI connectivity analysis
-3. Multi-modal fusion (MRI + fMRI + EEG)
-4. Real-time neuroimaging dashboard
-5. Integration with clinical imaging devices
-
-## 📜 License
-MIT License - see [LICENSE](LICENSE)
-
----
-© 2026 Neurapedia Project | [GitHub](#)
+MIT. See [LICENSE](LICENSE).

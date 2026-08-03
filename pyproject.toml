@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neurapedia"
+version = "0.2.0"
+description = "Local research-only neuroimaging inspection and reporting toolkit"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = { file = "LICENSE" }
+authors = [{ name = "Neurapedia Project" }]
+dependencies = ["numpy>=1.26,<3"]
+
+[project.optional-dependencies]
+imaging = ["nibabel>=5.3,<6", "pydicom>=3,<4"]
+models = ["torch>=2.2", "monai>=1.3"]
+dev = ["pytest>=8", "black>=24", "flake8>=7"]
+
+[project.scripts]
+neurapedia = "neurapedia.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["neurapedia*"]
+
+[tool.black]
+line-length = 100
+

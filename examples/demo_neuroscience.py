@@ -1,20 +1,12 @@
-"""Neurapedia demo: segment a synthetic MRI and run anomaly detection."""
-import os
+"""Run the dependency-light Neurapedia research demonstration."""
+
+from pathlib import Path
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.neuroscience import NeuroimagingDataLoader, BrainSegmenter, AnomalyDetector, BRAIN_REGIONS
+from neurapedia.cli import main  # noqa: E402
 
-loader = NeuroimagingDataLoader("data/neuroscience")
-image = loader.load_nifti("synthetic", patient_id="patient_001")
-segmenter = BrainSegmenter()
-segments = segmenter.segment_lobes(image)
-detector = AnomalyDetector()
-anomalies = detector.detect(image, regions=segments)
 
-print("[Neurapedia] image shape:", image.get_shape())
-print("[Neurapedia] regions:", sorted(segments))
-print("[Neurapedia] anomalies:", [a.to_dict() for a in anomalies])
-print()
-print(detector.generate_clinical_report(anomalies))
+if __name__ == "__main__":
+    raise SystemExit(main(["demo", "--shape", "48", "48", "24", "--output", "neurapedia-report.html"]))
