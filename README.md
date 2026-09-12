@@ -54,6 +54,10 @@ Optional development tools are available with `python -m pip install -e .[dev]`.
 - Produces a disjoint, coarse research atlas with ten named region labels for visualization and testing. It is not a clinical anatomical segmentation.
 - Detects robust intensity observations and connected components. It does not assign diagnoses or calibrated clinical probabilities.
 - Writes self-contained HTML and JSON research summaries with source metadata and safety warnings.
+- Includes a versioned, metadata-only reference registry for normal anatomy,
+  pathology/lesion, artifact/QC, reconstruction, and ground-truth datasets.
+- Produces deterministic reference-selection plans and review-only technical
+  correction suggestions; it never edits voxels or recommends treatment.
 
 ## Optional open-source backends
 
@@ -79,3 +83,18 @@ neurapedia/
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Reference registry
+
+Inspect the reference registry without downloading data:
+
+```powershell
+python -m neurapedia reference validate
+python -m neurapedia reference search --modality MRI --evidence-class lesion_benchmark --json
+python -m neurapedia reference plan --purpose artifact_correction --modality MRI --json
+```
+
+See [REFERENCE_ENGINE_PLAN.md](REFERENCE_ENGINE_PLAN.md) for the dataset
+catalog, access/licensing boundary, implemented baseline, and production
+upgrade path. Large, controlled, or non-redistributable datasets must be
+acquired under their provider terms.

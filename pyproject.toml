@@ -23,6 +23,9 @@ neurapedia = "neurapedia.cli:main"
 [tool.setuptools.packages.find]
 include = ["neurapedia*"]
 
+[tool.setuptools.package-data]
+neurapedia = ["reference-manifest.json"]
+
 [tool.black]
 line-length = 100
 

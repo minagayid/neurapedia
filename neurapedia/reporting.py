@@ -8,16 +8,21 @@ from pathlib import Path
 from typing import Iterable
 
 from .core import Anomaly, BRAIN_REGIONS, NeuroImage
+from .correction import CorrectionSuggestion
+from .references import ReferencePlan
 
 
 def render_html_report(
     image: NeuroImage,
     anomalies: Iterable[Anomaly] = (),
     segments: dict[str, object] | None = None,
+    reference_plan: ReferencePlan | None = None,
+    correction_suggestions: Iterable[CorrectionSuggestion] = (),
     title: str = "Experimental Research Summary",
 ) -> str:
     image.validate()
     anomalies = list(anomalies)
+    correction_suggestions = list(correction_suggestions)
     legend = "".join(
         f'<li><span class="swatch" style="background:{details["color"]}"></span>{html.escape(details["name"])}</li>'
         for details in BRAIN_REGIONS.values()
@@ -35,6 +40,21 @@ def render_html_report(
         )
     if not rows:
         rows.append('<tr><td colspan="5">No experimental observations exceeded the configured threshold.</td></tr>')
+    plan_text = "No reference plan supplied."
+    if reference_plan:
+        plan_text = html.escape(json.dumps(reference_plan.to_dict(), indent=2, sort_keys=True))
+    suggestion_rows = []
+    for suggestion in correction_suggestions:
+        suggestion_rows.append(
+            "<tr>"
+            f"<td>{html.escape(suggestion.category)}</td>"
+            f"<td>{html.escape(suggestion.status)}</td>"
+            f"<td>{html.escape(suggestion.action)}</td>"
+            f"<td>{html.escape('; '.join(suggestion.evidence))}</td>"
+            "</tr>"
+        )
+    if not suggestion_rows:
+        suggestion_rows.append('<tr><td colspan="4">No correction-planning suggestions.</td></tr>')
     region_counts = {}
     if segments:
         region_counts = {name: int(mask.sum()) for name, mask in segments.items()}
@@ -52,6 +72,8 @@ table {{ width:100%; border-collapse:collapse; }} th,td {{ border-bottom:1px sol
 <section><h2>Image</h2><dl><dt>Patient label</dt><dd>{html.escape(image.patient_id)}</dd><dt>Scan type</dt><dd>{html.escape(image.scan_type)}</dd><dt>Shape</dt><dd>{html.escape(str(list(image.data.shape)))}</dd><dt>Source format</dt><dd>{html.escape(str(image.metadata.get("source_format", "unknown")))}</dd></dl></section>
 <section><h2>Region legend</h2><ul class="legend">{legend}</ul></section>
 <section><h2>Experimental observations</h2><table><thead><tr><th>Region</th><th>Observation</th><th>Robust score</th><th>Voxels</th><th>Interpretation</th></tr></thead><tbody>{''.join(rows)}</tbody></table></section>
+<section><h2>Reference selection plan</h2><p>Metadata-first source selection for research comparison; access terms remain provider-specific.</p><pre>{plan_text}</pre></section>
+<section><h2>Correction planning</h2><p>Review-only technical QC guidance. No voxel edit or clinical recommendation is produced.</p><table><thead><tr><th>Category</th><th>Status</th><th>Suggested next action</th><th>Evidence</th></tr></thead><tbody>{''.join(suggestion_rows)}</tbody></table></section>
 <section><h2>Region voxel counts</h2><pre>{html.escape(json.dumps(region_counts, indent=2, sort_keys=True))}</pre></section>
 </body></html>"""
 
@@ -61,15 +83,29 @@ def write_report(
     image: NeuroImage,
     anomalies: Iterable[Anomaly] = (),
     segments: dict[str, object] | None = None,
+    reference_plan: ReferencePlan | None = None,
+    correction_suggestions: Iterable[CorrectionSuggestion] = (),
 ) -> Path:
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
     anomalies = list(anomalies)
-    destination.write_text(render_html_report(image, anomalies, segments), encoding="utf-8")
+    correction_suggestions = list(correction_suggestions)
+    destination.write_text(
+        render_html_report(
+            image,
+            anomalies,
+            segments,
+            reference_plan=reference_plan,
+            correction_suggestions=correction_suggestions,
+        ),
+        encoding="utf-8",
+    )
     payload = {
         "image": image.summary(),
         "anomalies": [anomaly.to_dict() for anomaly in anomalies],
         "regions": {name: int(mask.sum()) for name, mask in (segments or {}).items()},
+        "reference_plan": reference_plan.to_dict() if reference_plan else None,
+        "correction_suggestions": [suggestion.to_dict() for suggestion in correction_suggestions],
         "safety": "Research use only; not for diagnosis or clinical decision-making.",
     }
     destination.with_suffix(".json").write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
