@@ -29,6 +29,11 @@ def build_parser() -> argparse.ArgumentParser:
     analyze = commands.add_parser("analyze", help="analyze a NPY, NIfTI, or DICOM study")
     analyze.add_argument("input", type=Path)
     analyze.add_argument("--format", choices=["auto", "npy", "nifti", "dicom"], default="auto")
+    analyze.add_argument(
+        "--frame",
+        type=int,
+        help="zero-based temporal frame to analyze when the input is 4-D",
+    )
     analyze.add_argument("--patient-id")
     analyze.add_argument("--output", type=Path, default=Path("neurapedia-report.html"))
     analyze.add_argument("--threshold", type=float, default=4.0)
@@ -121,8 +126,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         else:
             image = NeuroimagingDataLoader().load(args.input, patient_id=args.patient_id, format=args.format)
-        segments = BrainSegmenter().segment(image)
-        anomalies = AnomalyDetector(threshold=args.threshold).detect(image, regions=segments)
+        frame_index = getattr(args, "frame", None)
+        segments = BrainSegmenter().segment(image, frame_index=frame_index)
+        anomalies = AnomalyDetector(threshold=args.threshold).detect(
+            image, regions=segments, frame_index=frame_index
+        )
+        if frame_index is not None:
+            image.metadata["analysis_frame"] = frame_index
         modality = args.reference_modality or image.scan_type
         reference_plan = ReferenceRegistry.from_path().plan(args.reference_purpose, modality)
         correction_suggestions = CorrectionPlanner().plan(

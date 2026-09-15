@@ -29,6 +29,14 @@ python -m neurapedia analyze scan.nii.gz --output scan-report.html
 python -m neurapedia analyze dicom-study/ --format dicom --output dicom-report.html
 ```
 
+For a 4-D NIfTI or NumPy time series, select one zero-based frame explicitly:
+
+```powershell
+python -m neurapedia analyze bold.nii.gz --frame 12 --output frame-12-report.html
+```
+
+Analysis never averages a time series implicitly. Intake is bounded to 512 MiB per file, 16 million spatial voxels, 32 million voxels total, and 512 temporal frames. DICOM folders are limited to 512 instances and 512 MiB total; multi-frame DICOM objects are rejected until their per-frame geometry can be represented safely. DICOM inputs must describe one consistently oriented and regularly spaced grayscale series. Physical NIfTI and DICOM affines use RAS+ millimeters; DICOM LPS coordinates are converted to RAS+. NumPy volumes use voxel-index coordinates because they carry no physical orientation.
+
 The direct launcher also works from a fresh checkout:
 
 ```powershell

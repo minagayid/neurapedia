@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Iterable
+from collections.abc import Iterable, Iterator
 
 import numpy as np
 
 from .core import Anomaly, BRAIN_REGIONS, NeuroImage, _ellipsoid_mask
+from .limits import MAX_ANOMALY_COMPONENTS, MAX_ANOMALY_VOXELS
 
 
 class BrainSegmenter:
@@ -16,17 +17,17 @@ class BrainSegmenter:
     def __init__(self) -> None:
         self.regions = BRAIN_REGIONS
 
-    def brain_mask(self, image: NeuroImage) -> np.ndarray:
-        data = image.spatial_data
+    def brain_mask(self, image: NeuroImage, frame_index: int | None = None) -> np.ndarray:
+        data = image.spatial_data_for_frame(frame_index)
         return _ellipsoid_mask(tuple(int(size) for size in data.shape))
 
-    def segment(self, image: NeuroImage) -> dict[str, np.ndarray]:
-        data = image.spatial_data
+    def segment(self, image: NeuroImage, frame_index: int | None = None) -> dict[str, np.ndarray]:
+        data = image.spatial_data_for_frame(frame_index)
         image.validate()
         shape = tuple(int(size) for size in data.shape)
         axes = [np.linspace(-1.0, 1.0, size, dtype=np.float32) for size in shape]
         x, y, z = np.ix_(*axes)
-        brain = self.brain_mask(image)
+        brain = self.brain_mask(image, frame_index=frame_index)
         assigned = np.zeros(shape, dtype=bool)
         candidates: list[tuple[str, np.ndarray]] = [
             ("cerebellum", brain & (z < -0.48)),
@@ -54,11 +55,21 @@ class BrainSegmenter:
         return self.regions.get(key, {}).get("color", "#808080")
 
 
-def _connected_components(mask: np.ndarray) -> list[list[tuple[int, int, int]]]:
-    remaining = {tuple(int(value) for value in coordinate) for coordinate in np.argwhere(mask)}
-    components: list[list[tuple[int, int, int]]] = []
+def _connected_components(
+    mask: np.ndarray,
+    max_voxels: int = MAX_ANOMALY_VOXELS,
+    max_components: int = MAX_ANOMALY_COMPONENTS,
+) -> Iterator[list[tuple[int, int, int]]]:
+    voxel_count = int(np.count_nonzero(mask))
+    if voxel_count > max_voxels:
+        raise ValueError(f"anomaly mask exceeds the {max_voxels:,}-voxel extraction limit")
+    coordinates = np.argwhere(mask)
+    remaining = {tuple(int(value) for value in coordinate) for coordinate in coordinates}
     neighbors = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
+    component_count = 0
     while remaining:
+        if component_count >= max_components:
+            raise ValueError(f"anomaly mask exceeds the {max_components:,}-component extraction limit")
         seed = remaining.pop()
         queue: deque[tuple[int, int, int]] = deque([seed])
         component = [seed]
@@ -70,8 +81,8 @@ def _connected_components(mask: np.ndarray) -> list[list[tuple[int, int, int]]]:
                     remaining.remove(neighbor)
                     queue.append(neighbor)
                     component.append(neighbor)
-        components.append(component)
-    return components
+        component_count += 1
+        yield component
 
 
 class AnomalyDetector:
@@ -89,12 +100,14 @@ class AnomalyDetector:
         image: NeuroImage,
         reference: NeuroImage | None = None,
         regions: dict[str, np.ndarray] | None = None,
+        frame_index: int | None = None,
     ) -> list[Anomaly]:
         image.validate()
-        current = np.asarray(image.spatial_data, dtype=np.float32)
+        current = np.asarray(image.spatial_data_for_frame(frame_index), dtype=np.float32)
         if reference is not None:
             reference.validate()
-            baseline = np.asarray(reference.spatial_data, dtype=np.float32)
+            reference_frame = frame_index if reference.data.ndim == 4 else None
+            baseline = np.asarray(reference.spatial_data_for_frame(reference_frame), dtype=np.float32)
             if baseline.shape != current.shape:
                 raise ValueError("reference and image spatial shapes must match")
             values = current - baseline
@@ -102,7 +115,7 @@ class AnomalyDetector:
         else:
             values = current
             anomaly_type = "intensity_observation"
-        analysis_mask = BrainSegmenter().brain_mask(image)
+        analysis_mask = BrainSegmenter().brain_mask(image, frame_index=frame_index)
         if regions:
             region_masks = [mask for mask in regions.values() if mask.shape == analysis_mask.shape]
             if region_masks:
@@ -118,8 +131,18 @@ class AnomalyDetector:
             return []
         scores = np.abs((values - median) / mad)
         outliers = (scores >= self.threshold) & analysis_mask
+        outlier_count = int(np.count_nonzero(outliers))
+        if outlier_count > MAX_ANOMALY_VOXELS:
+            raise ValueError(
+                f"anomaly mask contains {outlier_count:,} voxels; "
+                f"the extraction limit is {MAX_ANOMALY_VOXELS:,}"
+            )
         anomalies: list[Anomaly] = []
-        for component in _connected_components(outliers):
+        for component in _connected_components(
+            outliers,
+            max_voxels=MAX_ANOMALY_VOXELS,
+            max_components=MAX_ANOMALY_COMPONENTS,
+        ):
             if len(component) < self.min_voxels:
                 continue
             centroid = tuple(int(round(float(np.mean([point[index] for point in component])))) for index in range(3))
@@ -151,4 +174,3 @@ class AnomalyDetector:
             if all(0 <= centroid[index] < mask.shape[index] for index in range(3)) and mask[centroid]:
                 return BRAIN_REGIONS.get(region_name, {}).get("name", region_name)
         return "unclassified"
-

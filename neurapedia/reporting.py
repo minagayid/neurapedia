@@ -55,6 +55,9 @@ def render_html_report(
         )
     if not suggestion_rows:
         suggestion_rows.append('<tr><td colspan="4">No correction-planning suggestions.</td></tr>')
+    analysis_frame = ""
+    if "analysis_frame" in image.metadata:
+        analysis_frame = f'<dt>Analyzed frame</dt><dd>{int(image.metadata["analysis_frame"])}</dd>'
     region_counts = {}
     if segments:
         region_counts = {name: int(mask.sum()) for name, mask in segments.items()}
@@ -69,7 +72,7 @@ section,header {{ background:#fff; border:1px solid #d8e0e8; border-radius:.75re
 table {{ width:100%; border-collapse:collapse; }} th,td {{ border-bottom:1px solid #e5e7eb; text-align:left; padding:.55rem; }} th {{ background:#eef3f8; }} code {{ font-family:monospace; }}
 </style></head><body>
 <header><h1>{html.escape(title)}</h1><p class="warning"><strong>Research use only:</strong> this output is not for diagnosis, prognosis, treatment recommendation, or clinical decision-making. Every observation requires qualified human review.</p></header>
-<section><h2>Image</h2><dl><dt>Patient label</dt><dd>{html.escape(image.patient_id)}</dd><dt>Scan type</dt><dd>{html.escape(image.scan_type)}</dd><dt>Shape</dt><dd>{html.escape(str(list(image.data.shape)))}</dd><dt>Source format</dt><dd>{html.escape(str(image.metadata.get("source_format", "unknown")))}</dd></dl></section>
+<section><h2>Image</h2><dl><dt>Patient label</dt><dd>{html.escape(image.patient_id)}</dd><dt>Scan type</dt><dd>{html.escape(image.scan_type)}</dd><dt>Shape</dt><dd>{html.escape(str(list(image.data.shape)))}</dd><dt>Source format</dt><dd>{html.escape(str(image.metadata.get("source_format", "unknown")))}</dd>{analysis_frame}</dl></section>
 <section><h2>Region legend</h2><ul class="legend">{legend}</ul></section>
 <section><h2>Experimental observations</h2><table><thead><tr><th>Region</th><th>Observation</th><th>Robust score</th><th>Voxels</th><th>Interpretation</th></tr></thead><tbody>{''.join(rows)}</tbody></table></section>
 <section><h2>Reference selection plan</h2><p>Metadata-first source selection for research comparison; access terms remain provider-specific.</p><pre>{plan_text}</pre></section>
