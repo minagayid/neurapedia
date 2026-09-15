@@ -8,6 +8,8 @@ from typing import Any
 
 import numpy as np
 
+from .limits import validate_volume_shape
+
 
 BRAIN_REGIONS: dict[str, dict[str, Any]] = {
     "frontal": {
@@ -88,10 +90,7 @@ class NeuroImage:
 
     def validate(self) -> "NeuroImage":
         self.data = np.asarray(self.data)
-        if self.data.ndim not in (3, 4):
-            raise ValueError("neuroimaging data must be 3-D or 4-D")
-        if any(size < 1 for size in self.data.shape):
-            raise ValueError("neuroimaging dimensions must be positive")
+        validate_volume_shape(self.data.shape, "neuroimaging")
         if not np.issubdtype(self.data.dtype, np.number):
             raise ValueError("neuroimaging data must be numeric")
         if not np.all(np.isfinite(self.data)):
@@ -105,9 +104,24 @@ class NeuroImage:
 
     @property
     def spatial_data(self) -> np.ndarray:
+        """Return a 3-D image, requiring an explicit frame for a time series."""
+
+        return self.spatial_data_for_frame()
+
+    def spatial_data_for_frame(self, frame_index: int | None = None) -> np.ndarray:
+        """Return spatial data without reducing or averaging temporal frames."""
+
         self.validate()
         if self.data.ndim == 4:
-            return np.mean(self.data, axis=-1, dtype=np.float32)
+            if frame_index is None:
+                raise ValueError("4-D time series analysis requires an explicit frame_index")
+            if isinstance(frame_index, bool) or not isinstance(frame_index, (int, np.integer)):
+                raise ValueError("frame_index must be an integer")
+            if not 0 <= int(frame_index) < self.data.shape[3]:
+                raise ValueError(f"frame_index must be between 0 and {self.data.shape[3] - 1}")
+            return self.data[..., int(frame_index)]
+        if frame_index is not None:
+            raise ValueError("frame_index can only be used with a 4-D time series")
         return self.data
 
     @property
@@ -196,4 +210,3 @@ def generate_synthetic_mri(
         affine=np.eye(4, dtype=np.float32),
         metadata={"synthetic": True, "source_format": "synthetic", "seed": seed, "brain_mask": "ellipsoid"},
     ).validate()
-
