@@ -106,3 +106,7 @@ See [REFERENCE_ENGINE_PLAN.md](REFERENCE_ENGINE_PLAN.md) for the dataset
 catalog, access/licensing boundary, implemented baseline, and production
 upgrade path. Large, controlled, or non-redistributable datasets must be
 acquired under their provider terms.
+
+## Agent evaluation roadmap
+
+See [evaluation contracts and evidence gates](docs/evaluation-roadmap.md) and [Agent Eval Lab](https://github.com/minagayid/agent-eval-lab).
